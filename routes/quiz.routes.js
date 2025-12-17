@@ -6,7 +6,7 @@ import {
     submitQuiz,
     getUserQuizHistory,
     getCompletedQuizzes  // Add this
-} from '../controllers/quizController.js';
+} from '../controllers/quiz.controller.js';
 
 const router = express.Router();
 
