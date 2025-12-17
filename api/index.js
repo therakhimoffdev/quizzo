@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-
-import connectDB from '../lib/db.js';
+import quizRoutes from '../routes/quiz.routes.js';
 import userRoutes from '../routes/user.routes.js';
+import connectDB from '../lib/db.js';
+import authRoutes from '../routes/auth.routes.js';
 
 dotenv.config();
 
@@ -19,8 +20,18 @@ app.get('/', (req, res) => {
 });
 
 // Routes
-app.use('/api/user', userRoutes);
+app.use('/api/user', authRoutes);
+app.use('/api/quizzes', quizRoutes);
+app.use('/api/users', userRoutes);
 
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        success: false,
+        message: 'Something went wrong!',
+        error: err.message
+    });
+});
 // Connect MongoDB once at startup
 connectDB()
     .then(() => console.log('MongoDB connected'))
