@@ -1,18 +1,21 @@
+// routes/quizRoutes.js
 import express from 'express';
 import {
     getAllQuizzes,
     getQuizById,
     submitQuiz,
-    getUserQuizHistory
-} from '../controllers/quiz.controller.js';
+    getUserQuizHistory,
+    getCompletedQuizzes  // Add this
+} from '../controllers/quizController.js';
 
 const router = express.Router();
 
 // Public routes
 router.get('/', getAllQuizzes);
+router.get('/completed', getCompletedQuizzes);  // New route
 router.get('/:id', getQuizById);
 
-// Protected routes (add authentication middleware as needed)
+// Protected routes
 router.post('/submit', submitQuiz);
 router.get('/history/:userId', getUserQuizHistory);
 

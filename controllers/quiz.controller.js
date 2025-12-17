@@ -6,9 +6,21 @@ import User from '../models/User.js';
 // Get all active quizzes
 export const getAllQuizzes = async (req, res) => {
     try {
+        const { userId } = req.query;
+
+        // Get all active quizzes
         const quizzes = await Quiz.find({ isActive: true })
-            .select('name description category timeLimit color rating')
+            .select('name description category timeLimit color rating totalQuestions playCount')
             .lean();
+
+        // If userId is provided, check which quizzes the user has completed
+        let completedQuizIds = [];
+        if (userId) {
+            const userResults = await Result.find({ userId })
+                .select('quizId')
+                .lean();
+            completedQuizIds = userResults.map(result => result.quizId.toString());
+        }
 
         // Transform data for frontend
         const transformedQuizzes = quizzes.map(quiz => ({
@@ -18,12 +30,58 @@ export const getAllQuizzes = async (req, res) => {
             timeLimit: quiz.timeLimit,
             color: quiz.color,
             rating: quiz.rating,
-            questions: new Array(quiz.totalQuestions)
+            totalQuestions: quiz.totalQuestions,
+            playCount: quiz.playCount,
+            questions: new Array(quiz.totalQuestions || 0),
+            isCompleted: completedQuizIds.includes(quiz._id.toString())
         }));
 
         res.json({
             success: true,
             data: transformedQuizzes
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+export const getCompletedQuizzes = async (req, res) => {
+    try {
+        const { userId } = req.query;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'userId is required'
+            });
+        }
+
+        // Get user's completed quiz results
+        const results = await Result.find({ userId })
+            .populate('quizId', 'name description category timeLimit color rating totalQuestions')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Filter out results without quiz data
+        const completedQuizzes = results
+            .filter(result => result.quizId)
+            .map(result => ({
+                ...result.quizId,
+                resultId: result._id,
+                completedAt: result.createdAt,
+                score: result.score,
+                correctAnswers: result.correctAnswers,
+                totalQuestions: result.totalQuestions,
+                isCompleted: true
+            }));
+
+        res.json({
+            success: true,
+            data: completedQuizzes
         });
     } catch (error) {
         res.status(500).json({
