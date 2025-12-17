@@ -1,8 +1,8 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
+import connectDB from '../lib/db.js';
 import userRoutes from '../routes/user.routes.js';
 
 dotenv.config();
@@ -13,7 +13,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Health check (FAQAT GET /)
+// Health check
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
@@ -21,9 +21,9 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api/user', userRoutes);
 
-// MongoDB
-mongoose.connect(process.env.MONGO_URI)
+// Connect MongoDB once at startup
+connectDB()
     .then(() => console.log('MongoDB connected'))
-    .catch(err => console.error('MongoDB error:', err));
+    .catch(err => console.error('MongoDB connection error:', err));
 
 export default app;

@@ -1,4 +1,5 @@
 import express from 'express';
+import connectDB from '../lib/db.js';
 import User from '../models/User.js';
 
 const router = express.Router();
@@ -12,16 +13,17 @@ router.post('/login', async (req, res) => {
     }
 
     try {
+        await connectDB(); // har safar connection tayyor bo‘lishi
+
         let user = await User.findOne({ telegram_id });
 
-        // 🔹 Agar foydalanuvchi mavjud bo‘lmasa — yaratamiz
         if (!user) {
             user = await User.create({
                 telegram_id,
                 first_name,
                 username,
                 photo_url,
-                coins: 100, // 🎁 boshlang‘ich bonus
+                coins: 100, // boshlang‘ich bonus
                 level: 1,
                 xp: 0,
                 rating: 1000,
@@ -30,7 +32,7 @@ router.post('/login', async (req, res) => {
 
         return res.json({
             success: true,
-            user, // 🔥 barcha boshlang‘ich qiymatlar frontendga qaytadi
+            user, // frontend uchun barcha qiymatlar
         });
     } catch (err) {
         console.error(err);
