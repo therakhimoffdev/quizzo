@@ -15,9 +15,7 @@ import { protect, adminOnly } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Public routes (if any)
-
-// Protected routes (require authentication)
+// Barcha route'lar authentication talab qiladi
 router.use(protect);
 
 // Task operations
@@ -31,8 +29,7 @@ router.put('/:id/progress', updateTaskProgress);
 router.post('/:id/complete', completeTask);
 
 // Admin routes
-router.use(adminOnly);
-router.post('/reset-daily', resetDailyTasks);
-router.post('/verify/:userTaskId', verifyTaskCompletion);
+router.post('/reset-daily', adminOnly, resetDailyTasks);
+router.post('/verify/:userTaskId', adminOnly, verifyTaskCompletion);
 
 export default router;

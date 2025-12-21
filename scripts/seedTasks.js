@@ -193,7 +193,7 @@ const tasks = [
 
 const seedTasks = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        await mongoose.connect("mongodb+srv://therakhimoffdev:40g948_SA@slot.yn1tdwo.mongodb.net/quizzo?retryWrites=true&w=majority");
         console.log('Connected to MongoDB');
 
         // Clear existing tasks

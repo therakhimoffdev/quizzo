@@ -183,4 +183,4 @@ export const awardStreakBonus = async (userId, streakDays) => {
     }
 
     return { awarded: false };
-};
+}; 

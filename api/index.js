@@ -22,14 +22,17 @@ const app = express();
 // Security middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL?.split(',') || [
+        'http://localhost:3000',
+        'https://your-frontend-domain.vercel.app'
+    ],
     credentials: true
 }));
 
 // Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100
 });
 app.use('/api/', limiter);
 
@@ -52,6 +55,14 @@ app.get('/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
+    });
+});
+
+// Test endpoint
+app.get('/', (req, res) => {
+    res.json({
+        message: 'API is running',
+        environment: process.env.NODE_ENV
     });
 });
 
@@ -81,44 +92,47 @@ app.use((err, req, res, next) => {
 
 // ==================== DATABASE CONNECTION ====================
 
+let isConnected = false;
+
 const connectDB = async () => {
+    if (isConnected) {
+        console.log('Using existing MongoDB connection');
+        return;
+    }
+
     try {
         await mongoose.connect(process.env.MONGODB_URI);
+        isConnected = true;
         console.log('MongoDB connected successfully');
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        process.exit(1);
+        throw error;
     }
 };
 
-// ==================== START SERVER ====================
+// Vercel uchun connection
+connectDB().catch(console.error);
 
-const PORT = process.env.PORT || 5000;
+// MongoDB connection events
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+});
 
-const startServer = async () => {
-    await connectDB();
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected');
+    isConnected = false;
+});
 
+// ==================== VERCEL SPECIFIC ====================
+
+// Serverless function uchun export
+export default app;
+
+// Agar lokal ishlatmoqchi bo'lsangiz
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
-        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`Environment: ${process.env.NODE_ENV}`);
     });
-};
-
-startServer();
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down gracefully...');
-    mongoose.connection.close(() => {
-        console.log('MongoDB connection closed');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT received. Shutting down gracefully...');
-    mongoose.connection.close(() => {
-        console.log('MongoDB connection closed');
-        process.exit(0);
-    });
-});
+} 
