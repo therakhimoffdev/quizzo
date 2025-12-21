@@ -2,12 +2,9 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
-import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
-// Import routes
+// Routes
 import taskRoutes from '../routes/task.routes.js';
 import authRoutes from '../routes/auth.routes.js';
 import userRoutes from '../routes/user.routes.js';
@@ -19,28 +16,13 @@ const app = express();
 
 // ==================== MIDDLEWARE ====================
 
-// Security middleware
-app.use(helmet());
-app.use(cors({
-    origin: process.env.FRONTEND_URL?.split(',') || [
-        'http://localhost:3000',
-        'https://karisa-rubbliest-apolitically.ngrok-free.dev'
-    ],
-    credentials: true
-}));
+// CORS barcha uchun ochiq
+app.use(cors());
 
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
-});
-app.use('/api/', limiter);
-
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
+// Body parser
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(compression());
 
 // ==================== ROUTES ====================
 
@@ -49,90 +31,45 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/quizzes', quizRoutes);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
-});
-
 // Test endpoint
 app.get('/', (req, res) => {
-    res.json({
-        message: 'API is running',
-        environment: process.env.NODE_ENV
-    });
+    res.json({ message: 'API is running' });
 });
 
 // ==================== ERROR HANDLING ====================
 
-// 404 handler
-app.use((req, res, next) => {
+// 404
+app.use((req, res) => {
     res.status(404).json({
         success: false,
-        message: `Route ${req.originalUrl} not found`
+        message: 'Route not found'
     });
 });
 
-// Global error handler
+// Global error
 app.use((err, req, res, next) => {
-    console.error('Global error:', err);
-
-    const statusCode = err.statusCode || 500;
-    const message = err.message || 'Internal server error';
-
-    res.status(statusCode).json({
+    console.error(err);
+    res.status(500).json({
         success: false,
-        message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        message: err.message || 'Server error'
     });
 });
 
-// ==================== DATABASE CONNECTION ====================
+// ==================== DATABASE ====================
 
-let isConnected = false;
+mongoose
+    .connect(process.env.MONGODB_URI)
+    .then(() => console.log('MongoDB connected'))
+    .catch((err) => console.error('MongoDB error:', err));
 
-const connectDB = async () => {
-    if (isConnected) {
-        console.log('Using existing MongoDB connection');
-        return;
-    }
+// ==================== EXPORT ====================
 
-    try {
-        await mongoose.connect(process.env.MONGODB_URI);
-        isConnected = true;
-        console.log('MongoDB connected successfully');
-    } catch (error) {
-        console.error('MongoDB connection error:', error);
-        throw error;
-    }
-};
-
-// Vercel uchun connection
-connectDB().catch(console.error);
-
-// MongoDB connection events
-mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB disconnected');
-    isConnected = false;
-});
-
-// ==================== VERCEL SPECIFIC ====================
-
-// Serverless function uchun export
 export default app;
 
-// Agar lokal ishlatmoqchi bo'lsangiz
+// Lokal ishga tushirish
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
-        console.log(`Environment: ${process.env.NODE_ENV}`);
     });
-} 
+}
