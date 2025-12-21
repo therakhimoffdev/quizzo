@@ -24,7 +24,7 @@ app.use(helmet());
 app.use(cors({
     origin: process.env.FRONTEND_URL?.split(',') || [
         'http://localhost:3000',
-        'https://your-frontend-domain.vercel.app'
+        'https://karisa-rubbliest-apolitically.ngrok-free.dev'
     ],
     credentials: true
 }));
