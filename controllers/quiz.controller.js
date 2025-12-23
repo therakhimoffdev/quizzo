@@ -3,6 +3,174 @@ import Question from '../models/Question.js';
 import Result from '../models/Result.js';
 import User from '../models/User.js';
 
+
+// =============== ADMIN UCHUN =====================
+
+// Create a new quiz with questions
+export const createQuiz = async (req, res) => {
+    try {
+        const {
+            name,
+            description,
+            category,
+            difficulty,
+            timeLimit,
+            color,
+            isActive,
+            questions
+        } = req.body;
+
+        // Validation
+        if (!name || !description || !category || !timeLimit || !questions || questions.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Barcha majburiy maydonlarni to\'ldiring'
+            });
+        }
+
+        // Admin borligi middleware orqali tekshirilgan
+        if (!req.admin) {
+            return res.status(401).json({
+                success: false,
+                message: 'Admin huquqlari talab qilinadi'
+            });
+        }
+
+        // Create quiz
+        const quiz = new Quiz({
+            name,
+            description,
+            category,
+            difficulty,
+            timeLimit,
+            color,
+            isActive,
+            totalQuestions: questions.length,
+            createdBy: req.admin._id, // Admin ID sini saqlaymiz
+            createdByType: 'admin', // Admin tomonidan yaratilganligini belgilaymiz
+            rating: 4.8,
+            playCount: 0
+        });
+
+        const savedQuiz = await quiz.save();
+
+        // Create questions
+        const questionPromises = questions.map((q) => {
+            const question = new Question({
+                quizId: savedQuiz._id,
+                questionText: q.questionText,
+                options: q.options.map(opt => ({
+                    text: opt.text,
+                    isCorrect: opt.isCorrect
+                })),
+                explanation: q.explanation || '',
+                points: q.points || 10,
+                timeLimit: q.timeLimit || 30
+            });
+            return question.save();
+        });
+
+        await Promise.all(questionPromises);
+
+        res.status(201).json({
+            success: true,
+            message: 'Quiz muvaffaqiyatli yaratildi',
+            data: {
+                quizId: savedQuiz._id,
+                name: savedQuiz.name,
+                totalQuestions: savedQuiz.totalQuestions
+            }
+        });
+    } catch (error) {
+        console.error('Quiz yaratishda xatolik:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Quiz yaratishda xatolik',
+            error: error.message
+        });
+    }
+};
+
+// Get quizzes created by current user (admin)
+export const getMyQuizzes = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Avval tizimga kiring'
+            });
+        }
+
+        const quizzes = await Quiz.find({ createdBy: req.user._id })
+            .sort({ createdAt: -1 })
+            .select('name description category difficulty timeLimit totalQuestions isActive playCount createdAt')
+            .lean();
+
+        res.json({
+            success: true,
+            data: quizzes
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// Delete a quiz
+export const deleteQuiz = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if user is authenticated
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Avval tizimga kiring'
+            });
+        }
+
+        // Find quiz
+        const quiz = await Quiz.findById(id);
+
+        if (!quiz) {
+            return res.status(404).json({
+                success: false,
+                message: 'Quiz topilmadi'
+            });
+        }
+
+        // Check if user owns the quiz or is admin
+        if (quiz.createdBy.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Bu quizni o\'chirish huquqingiz yo\'q'
+            });
+        }
+
+        // Delete associated questions first
+        await Question.deleteMany({ quizId: id });
+
+        // Delete quiz
+        await Quiz.findByIdAndDelete(id);
+
+        res.json({
+            success: true,
+            message: 'Quiz muvaffaqiyatli o\'chirildi'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// =============== ADMIN UCHUN TUGADI ==============================
+
 // Get all active quizzes
 export const getAllQuizzes = async (req, res) => {
     try {

@@ -9,7 +9,7 @@ import taskRoutes from '../routes/task.routes.js';
 import authRoutes from '../routes/auth.routes.js';
 import userRoutes from '../routes/user.routes.js';
 import quizRoutes from '../routes/quiz.routes.js';
-
+import adminRoutes from '../routes/admin.routes.js'
 dotenv.config();
 
 const app = express();
@@ -30,7 +30,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/quizzes', quizRoutes);
-
+app.use('/api/admin', adminRoutes)
 // Test endpoint
 app.get('/', (req, res) => {
     res.json({ message: 'API is running' });
@@ -58,7 +58,7 @@ app.use((err, req, res, next) => {
 // ==================== DATABASE ====================
 
 mongoose
-    .connect(process.env.MONGODB_URI) 
+    .connect(process.env.MONGODB_URI)
     .then(() => console.log('MongoDB connected'))
     .catch((err) => console.error('MongoDB error:', err));
 
