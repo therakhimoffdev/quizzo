@@ -58,7 +58,7 @@ app.use((err, req, res, next) => {
 // ==================== DATABASE ====================
 
 mongoose
-    .connect("mongodb+srv://therakhimoffdev:40g948_SA@slot.yn1tdwo.mongodb.net/quizzo?retryWrites=true&w=majority")
+    .connect(process.env.MONGODB_URI) 
     .then(() => console.log('MongoDB connected'))
     .catch((err) => console.error('MongoDB error:', err));
 
