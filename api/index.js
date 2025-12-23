@@ -18,7 +18,7 @@ const app = express();
 
 // CORS barcha uchun ochiq
 app.use(cors());
-
+app.set('trust proxy', 1);
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
