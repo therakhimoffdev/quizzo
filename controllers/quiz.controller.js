@@ -305,86 +305,121 @@ export const getQuizById = async (req, res) => {
 };
 
 // Submit quiz results
+// Submit quiz results (FIXED VERSION)
 export const submitQuiz = async (req, res) => {
+    const existingResult = await Result.findOne({ userId, quizId });
+    if (existingResult) {
+        return res.status(400).json({
+            success: false,
+            message: 'Bu quiz allaqachon yechilgan'
+        });
+    }
     try {
         const { userId, quizId, answers, timeSpent } = req.body;
 
-        // Get questions with correct answers
+        if (!userId || !quizId || !answers || answers.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Majburiy maydonlar yetishmayapti'
+            });
+        }
+
+        // 🔹 1. Savollarni olish
         const questions = await Question.find({ quizId });
+
+        if (!questions.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'Savollar topilmadi'
+            });
+        }
+
+        // 🔹 2. Question map (ENG MUHIM FIX)
+        const questionMap = {};
+        questions.forEach(q => {
+            questionMap[q._id.toString()] = q;
+        });
 
         let correctCount = 0;
         let totalScore = 0;
         const detailedAnswers = [];
 
-        // Calculate results
+        // 🔹 3. Hisoblash (BALL + TO‘G‘RI TEKSHIRUV)
         for (const answer of answers) {
-            const question = questions.find(q => q._id.toString() === answer.questionId);
+            const question = questionMap[answer.questionId];
             if (!question) continue;
 
-            const isCorrect = question.options[answer.selectedOption]?.isCorrect || false;
+            const selectedOption = question.options[answer.selectedOption];
+            const isCorrect = selectedOption ? selectedOption.isCorrect : false;
 
             if (isCorrect) {
                 correctCount++;
-                totalScore += question.points;
+                totalScore += question.points || 0;
             }
 
             detailedAnswers.push({
-                questionId: answer.questionId,
+                questionId: question._id,
                 selectedOption: answer.selectedOption,
                 isCorrect,
-                timeTaken: answer.timeTaken
+                timeTaken: answer.timeTaken || 0
             });
         }
 
-        // Calculate coins and XP
-        const coinsEarned = correctCount * 10; // 10 coins per correct answer
-        const xpEarned = Math.floor(totalScore / 10);
+        const wrongCount = questions.length - correctCount;
 
-        // Save result
+        // 🔹 4. COIN va XP LOGIKASI (FIX)
+        const coinsEarned = totalScore;              // 1 ball = 1 coin
+        const xpEarned = Math.floor(totalScore / 5); // balansli XP
+
+        // 🔹 5. Result saqlash
         const result = new Result({
             userId,
             quizId,
             score: totalScore,
             totalQuestions: questions.length,
             correctAnswers: correctCount,
-            wrongAnswers: questions.length - correctCount,
-            timeSpent,
+            wrongAnswers: wrongCount,
+            timeSpent: timeSpent || 0,
             answers: detailedAnswers,
             coinsEarned,
             xpEarned
         });
+
         await result.save();
 
-        // Update user stats
+        // 🔹 6. User yangilash
         const user = await User.findById(userId);
         if (user) {
-            user.coins += coinsEarned;
-            user.xp += xpEarned;
-            user.total_games += 1;
-            user.correct_answers += correctCount;
-            user.wrong_answers += (questions.length - correctCount);
+            user.coins = (user.coins || 0) + coinsEarned;
+            user.xp = (user.xp || 0) + xpEarned;
 
-            // Calculate level (every 1000 XP = 1 level)
+            user.total_games = (user.total_games || 0) + 1;
+            user.correct_answers = (user.correct_answers || 0) + correctCount;
+            user.wrong_answers = (user.wrong_answers || 0) + wrongCount;
+
+            // Level: har 1000 XP = 1 level
             user.level = Math.floor(user.xp / 1000) + 1;
 
             await user.save();
         }
 
-        res.json({
+        // 🔹 7. RESPONSE
+        return res.json({
             success: true,
             data: {
-                result: {
-                    score: totalScore,
-                    correctAnswers: correctCount,
-                    totalQuestions: questions.length,
-                    coinsEarned,
-                    xpEarned,
-                    timeSpent
-                }
+                score: totalScore,
+                correctAnswers: correctCount,
+                wrongAnswers: wrongCount,
+                totalQuestions: questions.length,
+                coinsEarned,
+                xpEarned,
+                timeSpent
             }
         });
+
     } catch (error) {
-        res.status(500).json({
+        console.error('SUBMIT QUIZ ERROR:', error);
+        return res.status(500).json({
             success: false,
             message: 'Server error',
             error: error.message
