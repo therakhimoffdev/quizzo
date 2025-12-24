@@ -306,53 +306,71 @@ export const getQuizById = async (req, res) => {
 
 // Submit quiz results
 // Submit quiz results (FIXED VERSION)
+// quiz.controller.js (BACKEND)
+
+// Submit quiz results - TO'LIQ TUZATILGAN VERSIYA
 export const submitQuiz = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { userId, quizId, answers, timeSpent } = req.body;
 
+        // Validation
         if (!userId || !quizId || !answers || answers.length === 0) {
+            await session.abortTransaction();
             return res.status(400).json({
                 success: false,
                 message: 'Majburiy maydonlar yetishmayapti'
             });
         }
 
-        // ✅ ENDI TO‘G‘RI JOYDA
-        const existingResult = await Result.findOne({ userId, quizId });
+        // Check if quiz already completed
+        const existingResult = await Result.findOne({ userId, quizId }).session(session);
         if (existingResult) {
+            await session.abortTransaction();
             return res.status(400).json({
                 success: false,
                 message: 'Bu quiz allaqachon yechilgan'
             });
         }
 
-        const questions = await Question.find({ quizId });
+        // 1. Savollarni olish
+        const questions = await Question.find({ quizId }).session(session);
+
         if (!questions.length) {
+            await session.abortTransaction();
             return res.status(404).json({
                 success: false,
                 message: 'Savollar topilmadi'
             });
         }
 
-        const questionMap = {};
+        // 2. Question map yaratish
+        const questionMap = new Map();
         questions.forEach(q => {
-            questionMap[q._id.toString()] = q;
+            questionMap.set(q._id.toString(), q);
         });
 
         let correctCount = 0;
         let totalScore = 0;
         const detailedAnswers = [];
 
+        // 3. Javoblarni tekshirish va ball hisoblash
         for (const answer of answers) {
-            const question = questionMap[answer.questionId];
-            if (!question) continue;
+            const question = questionMap.get(answer.questionId);
+
+            if (!question) {
+                console.warn(`Question not found: ${answer.questionId}`);
+                continue;
+            }
 
             const selectedOption = question.options[answer.selectedOption];
             const isCorrect = selectedOption ? selectedOption.isCorrect : false;
 
             if (isCorrect) {
                 correctCount++;
-                totalScore += question.points || 0;
+                totalScore += question.points || 10; // Har bir savol uchun points
             }
 
             detailedAnswers.push({
@@ -364,9 +382,14 @@ export const submitQuiz = async (req, res) => {
         }
 
         const wrongCount = questions.length - correctCount;
-        const coinsEarned = totalScore;
-        const xpEarned = Math.floor(totalScore / 5);
 
+        // 4. Coin va XP hisoblash
+        const coinsEarned = totalScore; // 1 ball = 1 coin
+        const xpEarned = Math.floor(totalScore / 5); // 5 ball = 1 XP
+        const bonusCoins = correctCount === questions.length ? Math.floor(coinsEarned * 0.2) : 0; // Bonus
+        const totalCoinsEarned = coinsEarned + bonusCoins;
+
+        // 5. Result yaratish
         const result = new Result({
             userId,
             quizId,
@@ -376,39 +399,85 @@ export const submitQuiz = async (req, res) => {
             wrongAnswers: wrongCount,
             timeSpent: timeSpent || 0,
             answers: detailedAnswers,
-            coinsEarned,
-            xpEarned
+            coinsEarned: totalCoinsEarned,
+            xpEarned,
+            bonusCoins,
+            percentage: Math.round((correctCount / questions.length) * 100),
+            grade: calculateGrade(correctCount, questions.length)
         });
 
-        await result.save();
+        await result.save({ session });
 
-        const user = await User.findById(userId);
+        // 6. User yangilash (coins, xp, statistikalar)
+        const user = await User.findById(userId).session(session);
         if (user) {
-            user.coins = (user.coins || 0) + coinsEarned;
+            user.coins = (user.coins || 0) + totalCoinsEarned;
             user.xp = (user.xp || 0) + xpEarned;
-            user.level = Math.floor(user.xp / 1000) + 1;
-            await user.save();
+            user.total_games = (user.total_games || 0) + 1;
+            user.correct_answers = (user.correct_answers || 0) + correctCount;
+            user.wrong_answers = (user.wrong_answers || 0) + wrongCount;
+
+            // Level hisoblash (har 1000 XP = 1 level)
+            const newLevel = Math.floor(user.xp / 1000) + 1;
+            user.level = newLevel;
+
+            // Agar yangi levelga o'tilgan bo'lsa
+            if (newLevel > user.level) {
+                user.coins += 50; // Level up bonus
+            }
+
+            await user.save({ session });
         }
 
+        // 7. Quiz playCount yangilash
+        await Quiz.findByIdAndUpdate(
+            quizId,
+            { $inc: { playCount: 1 } },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        // 8. Response
         return res.json({
             success: true,
             data: {
                 score: totalScore,
                 correctAnswers: correctCount,
+                wrongAnswers: wrongCount,
                 totalQuestions: questions.length,
-                coinsEarned,
-                xpEarned
+                coinsEarned: totalCoinsEarned,
+                xpEarned,
+                bonusCoins,
+                timeSpent: timeSpent || 0,
+                percentage: Math.round((correctCount / questions.length) * 100),
+                grade: calculateGrade(correctCount, questions.length)
             }
         });
 
     } catch (error) {
+        await session.abortTransaction();
         console.error('SUBMIT QUIZ ERROR:', error);
         return res.status(500).json({
             success: false,
             message: 'Server error',
             error: error.message
         });
+    } finally {
+        session.endSession();
     }
+};
+
+// Bahoni hisoblash funksiyasi
+const calculateGrade = (correctCount, totalQuestions) => {
+    const percentage = (correctCount / totalQuestions) * 100;
+
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B';
+    if (percentage >= 60) return 'C';
+    if (percentage >= 50) return 'D';
+    return 'F';
 };
 
 
