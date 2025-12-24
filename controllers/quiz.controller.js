@@ -307,13 +307,6 @@ export const getQuizById = async (req, res) => {
 // Submit quiz results
 // Submit quiz results (FIXED VERSION)
 export const submitQuiz = async (req, res) => {
-    const existingResult = await Result.findOne({ userId, quizId });
-    if (existingResult) {
-        return res.status(400).json({
-            success: false,
-            message: 'Bu quiz allaqachon yechilgan'
-        });
-    }
     try {
         const { userId, quizId, answers, timeSpent } = req.body;
 
@@ -324,9 +317,16 @@ export const submitQuiz = async (req, res) => {
             });
         }
 
-        // 🔹 1. Savollarni olish
-        const questions = await Question.find({ quizId });
+        // ✅ ENDI TO‘G‘RI JOYDA
+        const existingResult = await Result.findOne({ userId, quizId });
+        if (existingResult) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bu quiz allaqachon yechilgan'
+            });
+        }
 
+        const questions = await Question.find({ quizId });
         if (!questions.length) {
             return res.status(404).json({
                 success: false,
@@ -334,7 +334,6 @@ export const submitQuiz = async (req, res) => {
             });
         }
 
-        // 🔹 2. Question map (ENG MUHIM FIX)
         const questionMap = {};
         questions.forEach(q => {
             questionMap[q._id.toString()] = q;
@@ -344,7 +343,6 @@ export const submitQuiz = async (req, res) => {
         let totalScore = 0;
         const detailedAnswers = [];
 
-        // 🔹 3. Hisoblash (BALL + TO‘G‘RI TEKSHIRUV)
         for (const answer of answers) {
             const question = questionMap[answer.questionId];
             if (!question) continue;
@@ -366,12 +364,9 @@ export const submitQuiz = async (req, res) => {
         }
 
         const wrongCount = questions.length - correctCount;
+        const coinsEarned = totalScore;
+        const xpEarned = Math.floor(totalScore / 5);
 
-        // 🔹 4. COIN va XP LOGIKASI (FIX)
-        const coinsEarned = totalScore;              // 1 ball = 1 coin
-        const xpEarned = Math.floor(totalScore / 5); // balansli XP
-
-        // 🔹 5. Result saqlash
         const result = new Result({
             userId,
             quizId,
@@ -387,33 +382,22 @@ export const submitQuiz = async (req, res) => {
 
         await result.save();
 
-        // 🔹 6. User yangilash
         const user = await User.findById(userId);
         if (user) {
             user.coins = (user.coins || 0) + coinsEarned;
             user.xp = (user.xp || 0) + xpEarned;
-
-            user.total_games = (user.total_games || 0) + 1;
-            user.correct_answers = (user.correct_answers || 0) + correctCount;
-            user.wrong_answers = (user.wrong_answers || 0) + wrongCount;
-
-            // Level: har 1000 XP = 1 level
             user.level = Math.floor(user.xp / 1000) + 1;
-
             await user.save();
         }
 
-        // 🔹 7. RESPONSE
         return res.json({
             success: true,
             data: {
                 score: totalScore,
                 correctAnswers: correctCount,
-                wrongAnswers: wrongCount,
                 totalQuestions: questions.length,
                 coinsEarned,
-                xpEarned,
-                timeSpent
+                xpEarned
             }
         });
 
@@ -426,6 +410,7 @@ export const submitQuiz = async (req, res) => {
         });
     }
 };
+
 
 // Get user's quiz history
 export const getUserQuizHistory = async (req, res) => {
