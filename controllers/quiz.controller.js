@@ -21,76 +21,64 @@ export const getQuizById = async (req, res) => {
             });
         }
 
-        // ObjectId formatini tekshirish
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            // Valid ObjectId
-            const quiz = await Quiz.findById(id);
+        const quiz = await Quiz.findById(id);
 
-            if (!quiz) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Quiz topilmadi (ObjectId)'
-                });
-            }
-
-            // Savollarni olish
-            const questions = await Question.find({ quizId: id })
-                .select('questionText options explanation points timeLimit')
-                .lean();
-
-            // Optionlardan isCorrect ni olib tashlash
-            const secureQuestions = questions.map(q => ({
-                ...q,
-                options: q.options.map(opt => ({ text: opt.text }))
-            }));
-
-            // PlayCount ni oshirish
-            quiz.playCount = (quiz.playCount || 0) + 1;
-            await quiz.save();
-
-            return res.json({
-                success: true,
-                data: {
-                    quiz,
-                    questions: secureQuestions
-                }
-            });
-        } else {
-            // Agar ObjectId formatida bo'lmasa, boshqa usul bilan izlash
-            console.log('⚠️ ID ObjectId formatida emas, boshqa usul bilan izlaymiz...');
-
-            // String ID bo'lsa, Quiz modelda _id ni string sifatida solishtirish
-            const quiz = await Quiz.findOne({ _id: id.toString() });
-
-            if (!quiz) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Quiz topilmadi (string ID)'
-                });
-            }
-
-            // Savollarni olish
-            const questions = await Question.find({ quizId: quiz._id })
-                .select('questionText options explanation points timeLimit')
-                .lean();
-
-            const secureQuestions = questions.map(q => ({
-                ...q,
-                options: q.options.map(opt => ({ text: opt.text }))
-            }));
-
-            // PlayCount ni oshirish
-            quiz.playCount = (quiz.playCount || 0) + 1;
-            await quiz.save();
-
-            return res.json({
-                success: true,
-                data: {
-                    quiz,
-                    questions: secureQuestions
-                }
+        if (!quiz) {
+            return res.status(404).json({
+                success: false,
+                message: 'Quiz topilmadi'
             });
         }
+
+        const existingResult = await Result.findOne({ userId: req.user._id, quizId: id });
+        const isCompleted = !!existingResult;
+
+        if (quiz.isPremium && !req.user.isPremium && !isCompleted) {
+            return res.status(403).json({
+                success: false,
+                message: 'Premium obuna talab qilinadi'
+            });
+        }
+
+        // Savollarni olish
+        const questions = await Question.find({ quizId: id })
+            .select('questionText options explanation points timeLimit')
+            .lean();
+
+        let returnedQuestions;
+        if (isCompleted) {
+            returnedQuestions = questions.map(q => ({
+                _id: q._id,
+                questionText: q.questionText,
+                options: q.options, // full with isCorrect
+                explanation: q.explanation,
+                points: q.points,
+                timeLimit: q.timeLimit
+            }));
+        } else {
+            returnedQuestions = questions.map(q => ({
+                _id: q._id,
+                questionText: q.questionText,
+                options: q.options.map(opt => ({ text: opt.text })),
+                points: q.points,
+                timeLimit: q.timeLimit
+            }));
+        }
+
+        // PlayCount ni oshirish faqat birinchi marta
+        if (!isCompleted) {
+            quiz.playCount = (quiz.playCount || 0) + 1;
+            await quiz.save();
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                quiz,
+                questions: returnedQuestions,
+                isCompleted
+            }
+        });
 
     } catch (error) {
         console.error('❌ GET QUIZ BY ID ERROR:', error);
@@ -101,8 +89,6 @@ export const getQuizById = async (req, res) => {
         });
     }
 };
-
-// =============== SUBMIT QUIZ - TO'LIQ VERSIYA ===============
 
 // =============== SUBMIT QUIZ - FIXED & STABLE ===============
 export const submitQuiz = async (req, res) => {

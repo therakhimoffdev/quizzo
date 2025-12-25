@@ -17,9 +17,9 @@ const router = express.Router();
 // Public routes - hammaga ochiq
 router.get('/', getAllQuizzes);
 router.get('/completed', getCompletedQuizzes);
-router.get('/:id', getQuizById);
 
 // Protected routes - faqat tizimga kirganlar uchun
+router.get('/:id', protect, getQuizById);
 router.post('/submit', protect, submitQuiz);
 router.get('/history/:userId', protect, getUserQuizHistory);
 
