@@ -34,6 +34,10 @@ const quizSchema = new mongoose.Schema({
         type: String,
         default: 'blue'
     },
+    isPremium: {
+        type: Boolean,
+        default: false
+    },
     isActive: {
         type: Boolean,
         default: true

@@ -298,6 +298,7 @@ export const getAllQuizzes = async (req, res) => {
             rating: quiz.rating || 4.5,
             totalQuestions: quiz.totalQuestions || 0,
             playCount: quiz.playCount || 0,
+            isPremium: quiz.isPremium,
             isCompleted: completedQuizIds.includes(quiz._id.toString())
         }));
 
@@ -317,6 +318,7 @@ export const getAllQuizzes = async (req, res) => {
 };
 
 // =============== CREATE QUIZ (Admin) ===============
+// =============== CREATE QUIZ (Admin) ===============
 export const createQuiz = async (req, res) => {
     try {
         const {
@@ -327,6 +329,7 @@ export const createQuiz = async (req, res) => {
             timeLimit,
             color,
             isActive,
+            isPremium,  // Bu qatorni qo'shamiz
             questions
         } = req.body;
 
@@ -355,6 +358,7 @@ export const createQuiz = async (req, res) => {
             timeLimit,
             color: color || 'blue',
             isActive: isActive !== undefined ? isActive : true,
+            isPremium: isPremium === true,  // Bu qatorni qo'shamiz
             totalQuestions: questions.length,
             createdBy: req.admin?._id || req.user?._id,
             createdByType: req.admin ? 'admin' : 'user',
@@ -388,7 +392,8 @@ export const createQuiz = async (req, res) => {
             data: {
                 quizId: savedQuiz._id,
                 name: savedQuiz.name,
-                totalQuestions: savedQuiz.totalQuestions
+                totalQuestions: savedQuiz.totalQuestions,
+                isPremium: savedQuiz.isPremium  // Bu qatorni qo'shamiz
             }
         });
 
@@ -401,7 +406,6 @@ export const createQuiz = async (req, res) => {
         });
     }
 };
-
 // =============== OTHER FUNCTIONS ===============
 export const getCompletedQuizzes = async (req, res) => {
     try {
@@ -487,7 +491,7 @@ export const getMyQuizzes = async (req, res) => {
 
         const quizzes = await Quiz.find({ createdBy: user._id })
             .sort({ createdAt: -1 })
-            .select('name description category difficulty timeLimit totalQuestions isActive playCount createdAt')
+            .select('name description category difficulty timeLimit totalQuestions isActive isPremium playCount createdAt')
             .lean();
 
         res.json({
