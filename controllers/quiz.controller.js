@@ -262,31 +262,41 @@ export const getCompletedQuizzes = async (req, res) => {
 };
 
 // Get quiz by ID with questions - FIXED VERSION
+// Get quiz by ID with questions - IMPROVED VERSION
 export const getQuizById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validation: Check if id is valid
-        if (!id || id === 'undefined') {
+        console.log('🔍 Quiz ID from params:', id); // Debug log
+
+        // Yumshatilgan validation
+        if (!id || id === 'undefined' || id === 'null') {
+            console.error('❌ Invalid quiz ID received:', id);
             return res.status(400).json({
                 success: false,
-                message: 'Quiz ID not provided or invalid'
+                message: 'Quiz ID topilmadi yoki noto\'g\'ri',
+                receivedId: id // Qaysi ID kelyotganini ko'rish uchun
             });
         }
 
         // Check if id is valid ObjectId
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid quiz ID format'
-            });
+            console.warn('⚠️ Invalid ObjectId format:', id);
+            // Faqat ogohlantirish, lekin baribir quizni izlashga urinib ko'ramiz
+            // Chunki ba'zi ID lar ObjectId formatida bo'lmasligi mumkin
         }
 
         const quiz = await Quiz.findById(id);
         if (!quiz) {
+            // Quiz topilmasa, barcha quizlarni ko'rib chiqamiz
+            const allQuizzes = await Quiz.find({}).select('_id name').limit(5);
+            console.log('📋 Available quizzes:', allQuizzes);
+
             return res.status(404).json({
                 success: false,
-                message: 'Quiz not found'
+                message: 'Quiz topilmadi',
+                suggestion: 'Quizzes sahifasidan quiz tanlang',
+                availableQuizzes: allQuizzes.map(q => ({ id: q._id, name: q.name }))
             });
         }
 
@@ -294,7 +304,7 @@ export const getQuizById = async (req, res) => {
         quiz.playCount += 1;
         await quiz.save();
 
-        // Get questions (without correct answers initially)
+        // Get questions
         const questions = await Question.find({ quizId: id })
             .select('questionText options explanation points timeLimit')
             .lean();
@@ -305,6 +315,8 @@ export const getQuizById = async (req, res) => {
             options: q.options.map(opt => ({ text: opt.text }))
         }));
 
+        console.log('✅ Quiz found:', quiz.name, 'Questions:', secureQuestions.length);
+
         res.json({
             success: true,
             data: {
@@ -313,11 +325,12 @@ export const getQuizById = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('GET QUIZ BY ID ERROR:', error);
+        console.error('❌ GET QUIZ BY ID ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Server error',
-            error: error.message
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
