@@ -103,23 +103,31 @@ export const getQuizById = async (req, res) => {
 };
 
 // =============== SUBMIT QUIZ - TO'LIQ VERSIYA ===============
+
+// =============== SUBMIT QUIZ - FIXED & STABLE ===============
 export const submitQuiz = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
         const { userId, quizId, answers, timeSpent } = req.body;
 
-        console.log('📝 Submit quiz ma\'lumotlari:', { userId, quizId, answersCount: answers?.length });
+        console.log('📝 Submit quiz:', {
+            userId,
+            quizId,
+            answersCount: answers?.length,
+        });
 
-        // Validation
-        if (!userId || !quizId || !answers || answers.length === 0) {
+        // ===== VALIDATION =====
+        if (!userId || !quizId || !Array.isArray(answers) || answers.length === 0) {
             await session.abortTransaction();
             return res.status(400).json({
                 success: false,
-                message: 'Barcha maydonlarni to\'ldiring'
+                message: "Barcha maydonlarni to‘ldiring"
             });
         }
 
-        // Quiz allaqachon yechilganligini tekshirish
+        // ===== OLD RESULT CHECK (SESSION BILAN) =====
         const existingResult = await Result
             .findOne({ userId, quizId })
             .session(session);
@@ -128,22 +136,23 @@ export const submitQuiz = async (req, res) => {
             await session.abortTransaction();
             return res.status(400).json({
                 success: false,
-                message: 'Bu quiz allaqachon yechilgan'
+                message: "Bu quiz allaqachon yechilgan"
             });
         }
 
-        // Savollarni olish
-        const questions = await Question.find({ quizId });
+        // ===== QUESTIONS =====
+        const questions = await Question
+            .find({ quizId })
+            .session(session);
 
         if (!questions.length) {
             await session.abortTransaction();
             return res.status(404).json({
                 success: false,
-                message: 'Bu quiz uchun savollar topilmadi'
+                message: "Bu quiz uchun savollar topilmadi"
             });
         }
 
-        // Question map yaratish
         const questionMap = {};
         questions.forEach(q => {
             questionMap[q._id.toString()] = q;
@@ -153,17 +162,13 @@ export const submitQuiz = async (req, res) => {
         let totalScore = 0;
         const detailedAnswers = [];
 
-        // Javoblarni tekshirish
+        // ===== CHECK ANSWERS =====
         for (const answer of answers) {
             const question = questionMap[answer.questionId];
-
-            if (!question) {
-                console.warn(`Savol topilmadi: ${answer.questionId}`);
-                continue;
-            }
+            if (!question) continue;
 
             const selectedOption = question.options[answer.selectedOption];
-            const isCorrect = selectedOption ? selectedOption.isCorrect : false;
+            const isCorrect = selectedOption?.isCorrect === true;
 
             if (isCorrect) {
                 correctCount++;
@@ -180,13 +185,17 @@ export const submitQuiz = async (req, res) => {
 
         const wrongCount = questions.length - correctCount;
 
-        // Coins va XP hisoblash
+        // ===== REWARDS =====
         const coinsEarned = totalScore;
         const xpEarned = Math.floor(totalScore / 5);
-        const bonusCoins = correctCount === questions.length ? Math.floor(coinsEarned * 0.2) : 0;
+        const bonusCoins =
+            correctCount === questions.length
+                ? Math.floor(coinsEarned * 0.2)
+                : 0;
+
         const totalCoinsEarned = coinsEarned + bonusCoins;
 
-        // Result yaratish
+        // ===== SAVE RESULT =====
         const result = new Result({
             userId,
             quizId,
@@ -204,7 +213,7 @@ export const submitQuiz = async (req, res) => {
 
         await result.save({ session });
 
-        // User yangilash
+        // ===== UPDATE USER =====
         const user = await User.findById(userId).session(session);
         if (user) {
             user.coins = (user.coins || 0) + totalCoinsEarned;
@@ -212,23 +221,22 @@ export const submitQuiz = async (req, res) => {
             user.total_games = (user.total_games || 0) + 1;
             user.correct_answers = (user.correct_answers || 0) + correctCount;
             user.wrong_answers = (user.wrong_answers || 0) + wrongCount;
-
-            // Level hisoblash (har 1000 XP = 1 level)
             user.level = Math.floor(user.xp / 1000) + 1;
 
             await user.save({ session });
         }
 
-        // Quiz playCount yangilash
+        // ===== UPDATE QUIZ =====
         await Quiz.findByIdAndUpdate(
             quizId,
             { $inc: { playCount: 1 } },
             { session }
         );
 
+        // ===== COMMIT =====
         await session.commitTransaction();
+        session.endSession();
 
-        // Response
         return res.json({
             success: true,
             data: {
@@ -246,16 +254,18 @@ export const submitQuiz = async (req, res) => {
 
     } catch (error) {
         await session.abortTransaction();
+        session.endSession();
+
         console.error('❌ SUBMIT QUIZ ERROR:', error);
+
         return res.status(500).json({
             success: false,
-            message: 'Server xatosi',
+            message: "Server xatosi",
             error: error.message
         });
-    } finally {
-        session.endSession();
     }
 };
+
 
 // =============== GET ALL QUIZZES ===============
 export const getAllQuizzes = async (req, res) => {
