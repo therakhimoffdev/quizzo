@@ -104,8 +104,6 @@ export const getQuizById = async (req, res) => {
 
 // =============== SUBMIT QUIZ - TO'LIQ VERSIYA ===============
 export const submitQuiz = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
 
     try {
         const { userId, quizId, answers, timeSpent } = req.body;
@@ -122,7 +120,10 @@ export const submitQuiz = async (req, res) => {
         }
 
         // Quiz allaqachon yechilganligini tekshirish
-        const existingResult = await Result.findOne({ userId, quizId });
+        const existingResult = await Result
+            .findOne({ userId, quizId })
+            .session(session);
+
         if (existingResult) {
             await session.abortTransaction();
             return res.status(400).json({
