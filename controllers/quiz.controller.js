@@ -2,7 +2,7 @@ import Quiz from '../models/Quiz.js';
 import Question from '../models/Question.js';
 import Result from '../models/Result.js';
 import User from '../models/User.js';
-
+import mongoose from 'mongoose'; // 🔥 MUHIM: mongoose ni import qilish!
 
 // =============== ADMIN UCHUN =====================
 
@@ -46,8 +46,8 @@ export const createQuiz = async (req, res) => {
             color,
             isActive,
             totalQuestions: questions.length,
-            createdBy: req.admin._id, // Admin ID sini saqlaymiz
-            createdByType: 'admin', // Admin tomonidan yaratilganligini belgilaymiz
+            createdBy: req.admin._id,
+            createdByType: 'admin',
             rating: 4.8,
             playCount: 0
         });
@@ -169,7 +169,7 @@ export const deleteQuiz = async (req, res) => {
     }
 };
 
-// =============== ADMIN UCHUN TUGADI ==============================
+// =============== PUBLIC FUNCTIONS =====================
 
 // Get all active quizzes
 export const getAllQuizzes = async (req, res) => {
@@ -217,6 +217,7 @@ export const getAllQuizzes = async (req, res) => {
     }
 };
 
+// Get completed quizzes
 export const getCompletedQuizzes = async (req, res) => {
     try {
         const { userId } = req.query;
@@ -260,10 +261,26 @@ export const getCompletedQuizzes = async (req, res) => {
     }
 };
 
-// Get quiz by ID with questions
+// Get quiz by ID with questions - FIXED VERSION
 export const getQuizById = async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Validation: Check if id is valid
+        if (!id || id === 'undefined') {
+            return res.status(400).json({
+                success: false,
+                message: 'Quiz ID not provided or invalid'
+            });
+        }
+
+        // Check if id is valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid quiz ID format'
+            });
+        }
 
         const quiz = await Quiz.findById(id);
         if (!quiz) {
@@ -296,6 +313,7 @@ export const getQuizById = async (req, res) => {
             }
         });
     } catch (error) {
+        console.error('GET QUIZ BY ID ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Server error',
@@ -304,11 +322,19 @@ export const getQuizById = async (req, res) => {
     }
 };
 
-// Submit quiz results
-// Submit quiz results (FIXED VERSION)
-// quiz.controller.js (BACKEND)
+// Helper function for grade calculation
+const calculateGrade = (correctCount, totalQuestions) => {
+    const percentage = (correctCount / totalQuestions) * 100;
 
-// Submit quiz results - TO'LIQ TUZATILGAN VERSIYA
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B';
+    if (percentage >= 60) return 'C';
+    if (percentage >= 50) return 'D';
+    return 'F';
+};
+
+// Submit quiz results - COMPLETE FIXED VERSION
 export const submitQuiz = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -335,7 +361,7 @@ export const submitQuiz = async (req, res) => {
             });
         }
 
-        // 1. Savollarni olish
+        // 1. Get questions
         const questions = await Question.find({ quizId }).session(session);
 
         if (!questions.length) {
@@ -346,7 +372,7 @@ export const submitQuiz = async (req, res) => {
             });
         }
 
-        // 2. Question map yaratish
+        // 2. Create question map
         const questionMap = new Map();
         questions.forEach(q => {
             questionMap.set(q._id.toString(), q);
@@ -356,7 +382,7 @@ export const submitQuiz = async (req, res) => {
         let totalScore = 0;
         const detailedAnswers = [];
 
-        // 3. Javoblarni tekshirish va ball hisoblash
+        // 3. Check answers and calculate score
         for (const answer of answers) {
             const question = questionMap.get(answer.questionId);
 
@@ -370,7 +396,7 @@ export const submitQuiz = async (req, res) => {
 
             if (isCorrect) {
                 correctCount++;
-                totalScore += question.points || 10; // Har bir savol uchun points
+                totalScore += question.points || 10;
             }
 
             detailedAnswers.push({
@@ -383,13 +409,13 @@ export const submitQuiz = async (req, res) => {
 
         const wrongCount = questions.length - correctCount;
 
-        // 4. Coin va XP hisoblash
-        const coinsEarned = totalScore; // 1 ball = 1 coin
-        const xpEarned = Math.floor(totalScore / 5); // 5 ball = 1 XP
-        const bonusCoins = correctCount === questions.length ? Math.floor(coinsEarned * 0.2) : 0; // Bonus
+        // 4. Calculate coins and XP
+        const coinsEarned = totalScore;
+        const xpEarned = Math.floor(totalScore / 5);
+        const bonusCoins = correctCount === questions.length ? Math.floor(coinsEarned * 0.2) : 0;
         const totalCoinsEarned = coinsEarned + bonusCoins;
 
-        // 5. Result yaratish
+        // 5. Create result
         const result = new Result({
             userId,
             quizId,
@@ -408,7 +434,7 @@ export const submitQuiz = async (req, res) => {
 
         await result.save({ session });
 
-        // 6. User yangilash (coins, xp, statistikalar)
+        // 6. Update user
         const user = await User.findById(userId).session(session);
         if (user) {
             user.coins = (user.coins || 0) + totalCoinsEarned;
@@ -417,19 +443,21 @@ export const submitQuiz = async (req, res) => {
             user.correct_answers = (user.correct_answers || 0) + correctCount;
             user.wrong_answers = (user.wrong_answers || 0) + wrongCount;
 
-            // Level hisoblash (har 1000 XP = 1 level)
+            // Calculate level
             const newLevel = Math.floor(user.xp / 1000) + 1;
+
+            // Check if level increased
+            const oldLevel = user.level || 1;
             user.level = newLevel;
 
-            // Agar yangi levelga o'tilgan bo'lsa
-            if (newLevel > user.level) {
+            if (newLevel > oldLevel) {
                 user.coins += 50; // Level up bonus
             }
 
             await user.save({ session });
         }
 
-        // 7. Quiz playCount yangilash
+        // 7. Update quiz play count
         await Quiz.findByIdAndUpdate(
             quizId,
             { $inc: { playCount: 1 } },
@@ -467,19 +495,6 @@ export const submitQuiz = async (req, res) => {
         session.endSession();
     }
 };
-
-// Bahoni hisoblash funksiyasi
-const calculateGrade = (correctCount, totalQuestions) => {
-    const percentage = (correctCount / totalQuestions) * 100;
-
-    if (percentage >= 90) return 'A+';
-    if (percentage >= 80) return 'A';
-    if (percentage >= 70) return 'B';
-    if (percentage >= 60) return 'C';
-    if (percentage >= 50) return 'D';
-    return 'F';
-};
-
 
 // Get user's quiz history
 export const getUserQuizHistory = async (req, res) => {
