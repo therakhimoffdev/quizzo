@@ -274,7 +274,7 @@ export const getAllQuizzes = async (req, res) => {
 
         // Barcha faol quizlarni olish
         const quizzes = await Quiz.find({ isActive: true })
-            .select('name description category timeLimit color difficulty rating totalQuestions playCount')
+            .select('name description category timeLimit color difficulty rating totalQuestions playCount isPremium')
             .lean();
 
         // Agar userId berilgan bo'lsa, qaysi quizlar yechilganligini tekshirish
@@ -420,7 +420,7 @@ export const getCompletedQuizzes = async (req, res) => {
 
         // Userning yechgan quiz natijalarini olish
         const results = await Result.find({ userId })
-            .populate('quizId', 'name description category timeLimit color rating totalQuestions')
+            .populate('quizId', 'name description category timeLimit color rating totalQuestions isPremium')
             .sort({ createdAt: -1 })
             .lean();
 
