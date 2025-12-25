@@ -44,7 +44,9 @@ const resultSchema = new mongoose.Schema({
     xpEarned: {
         type: Number,
         default: 0
-    }
+    },
+    bonusCoins: Number,
+    percentage: Number
 }, {
     timestamps: true
 });

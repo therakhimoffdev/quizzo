@@ -5,28 +5,27 @@ import {
     submitQuiz,
     getUserQuizHistory,
     getCompletedQuizzes,
-    createQuiz,       // Yangi qo'shildi
-    getMyQuizzes,      // Yangi qo'shildi
+    createQuiz,
+    getMyQuizzes,
     deleteQuiz
 } from '../controllers/quiz.controller.js';
-import { adminAuth, adminRole } from '../middleware/adminAuth.js';
 import { protect } from '../middleware/auth.middleware.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
-// Public routes
+// Public routes - hammaga ochiq
 router.get('/', getAllQuizzes);
 router.get('/completed', getCompletedQuizzes);
 router.get('/:id', getQuizById);
 
-// Protected routes
+// Protected routes - faqat tizimga kirganlar uchun
 router.post('/submit', protect, submitQuiz);
 router.get('/history/:userId', protect, getUserQuizHistory);
 
-// Admin routes (faqat adminlar uchun)
-router.post('/create', adminAuth, adminRole('admin', 'super_admin'), createQuiz);
-router.get('/my-quizzes', adminAuth, adminRole('admin', 'super_admin'), getMyQuizzes);
-router.delete('/:id', adminAuth, adminRole('admin', 'super_admin'), deleteQuiz);
-
+// Admin routes - faqat adminlar uchun
+router.post('/create', adminAuth, createQuiz);
+router.get('/my-quizzes', adminAuth, getMyQuizzes);
+router.delete('/:id', adminAuth, deleteQuiz);
 
 export default router;
