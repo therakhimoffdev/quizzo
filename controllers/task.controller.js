@@ -68,6 +68,9 @@ export const getTasks = async (req, res) => {
         const userId = req.user._id;
         const { filter = 'all', category, type, difficulty } = req.query;
 
+        console.log('Getting tasks for user:', userId);
+        console.log('Filters:', { filter, category, type, difficulty });
+
         // Get all active tasks
         const tasks = await Task.find({
             isActive: true,
@@ -76,14 +79,18 @@ export const getTasks = async (req, res) => {
             ...(difficulty && { difficulty })
         }).sort({ createdAt: -1 });
 
+        console.log('Found tasks in DB:', tasks.length);
+
         // Get user's task progress
         const userTasks = await UserTask.find({
             user: userId
         }).populate('task');
 
+        console.log('Found user tasks:', userTasks.length);
+
         // Combine tasks with user progress
         const tasksWithProgress = await Promise.all(tasks.map(async (task) => {
-            const userTask = userTasks.find(ut => ut.task._id.toString() === task._id.toString());
+            const userTask = userTasks.find(ut => ut.task && ut.task._id.toString() === task._id.toString());
 
             let status = 'available';
             let progress = 0;
@@ -106,8 +113,8 @@ export const getTasks = async (req, res) => {
             // Check if user meets requirements
             const user = await User.findById(userId);
             const meetsRequirements =
-                user.level >= (task.requirements.minLevel || 1) &&
-                user.coins >= (task.requirements.minCoins || 0);
+                user.level >= (task.requirements?.minLevel || 1) &&
+                user.coins >= (task.requirements?.minCoins || 0);
 
             return {
                 ...task.toObject(),
@@ -126,6 +133,8 @@ export const getTasks = async (req, res) => {
 
         // Get user stats
         const userStats = await calculateUserStats(userId);
+
+        console.log('Sending filtered tasks:', filteredTasks.length);
 
         res.status(200).json({
             success: true,

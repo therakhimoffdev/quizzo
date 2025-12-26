@@ -13,7 +13,6 @@ import {
 } from '../controllers/task.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
 import { adminAuth } from '../middleware/adminAuth.js';
-
 const router = express.Router();
 
 // Barcha route'lar authentication talab qiladi
