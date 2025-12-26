@@ -69,7 +69,10 @@ export const adminRole = (...roles) => {
             });
         }
 
-        if (!roles.includes(req.admin.role)) {
+        const normalizedRoles = roles.map(r => r.toLowerCase());
+        const userRole = req.admin.role ? req.admin.role.toLowerCase() : null;
+
+        if (!userRole || !normalizedRoles.includes(userRole)) {
             return res.status(403).json({
                 success: false,
                 message: `Bu amalni bajarish uchun ${roles.join(' yoki ')} huquqi kerak`

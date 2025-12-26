@@ -11,7 +11,7 @@ import {
 import { adminAuth, adminRole } from '../../middleware/adminAuth.js';
 const router = express.Router();
 
-// All routes require admin authentication
+
 router.use(adminAuth);
 router.use(adminRole('admin', 'superadmin'));
 
