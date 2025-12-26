@@ -13,7 +13,7 @@ const router = express.Router();
 
 
 router.use(adminAuth);
-router.use(adminRole('admin', 'superadmin'));
+router.use(adminRole('admin', 'super_admin'));
 
 // Task CRUD operations
 router.post('/', createTask);
