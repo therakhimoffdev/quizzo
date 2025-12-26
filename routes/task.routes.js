@@ -11,7 +11,8 @@ import {
     verifyTaskCompletion,
     getTasksLeaderboard
 } from '../controllers/task.controller.js';
-import { protect, adminOnly } from '../middleware/auth.middleware.js';
+import { protect } from '../middleware/auth.middleware.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.put('/:id/progress', updateTaskProgress);
 router.post('/:id/complete', completeTask);
 
 // Admin routes
-router.post('/reset-daily', adminOnly, resetDailyTasks);
-router.post('/verify/:userTaskId', adminOnly, verifyTaskCompletion);
+router.post('/reset-daily', adminAuth, resetDailyTasks);
+router.post('/verify/:userTaskId', adminAuth, verifyTaskCompletion);
 
 export default router;

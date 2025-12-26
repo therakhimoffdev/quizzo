@@ -98,6 +98,26 @@ const taskSchema = new mongoose.Schema({
             ref: 'Task'
         }]
     },
+    isStatBased: {
+        type: Boolean,
+        default: false
+    },
+    statisticType: {
+        type: String,
+        enum: [
+            'total_games', 'wins', 'loses', 'correct_answers', 'wrong_answers',
+            'rating', 'coins', 'level', 'xp', 'streak', 'total_duels', 'win_rate'
+        ],
+        default: null
+    },
+    targetValue: {
+        type: Number,
+        default: 0
+    },
+    hideAfterCompletion: {
+        type: Boolean,
+        default: true
+    },
     metadata: {
         views: {
             type: Number,
