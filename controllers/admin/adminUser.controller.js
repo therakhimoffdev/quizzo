@@ -1,7 +1,7 @@
 // controllers/adminUserController.js
-import User from '../models/User.js';
-import UserStat from '../models/UserStat.js';
-import UserTask from '../models/UserTask.js';
+import User from '../../models/User.js';
+import UserStat from '../../models/UserStat.js';
+import UserTask from '../../models/UserTask.js';
 import mongoose from 'mongoose';
 
 // 1. Barcha foydalanuvchilarni olish (pagination va search bilan)
