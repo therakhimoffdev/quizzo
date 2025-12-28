@@ -9,7 +9,7 @@ export const createTask = async (req, res) => {
             title,
             description,
             type,
-            coins,
+            coins,              // ✅ MUHIM
             requiredAction,
             externalLink,
             timeEstimate,
@@ -18,6 +18,7 @@ export const createTask = async (req, res) => {
             isActive = true
         } = req.body;
 
+        // Validation
         if (!title || !description || !type || !coins || !requiredAction) {
             return res.status(400).json({
                 success: false,
@@ -29,7 +30,10 @@ export const createTask = async (req, res) => {
             title,
             description,
             type,
-            coins,
+            reward: {
+                coins: Number(coins), // ✅ MODELGA MOS
+                xp: 0
+            },
             requiredAction,
             externalLink,
             timeEstimate: timeEstimate || '1–2 daqiqa',
@@ -50,7 +54,7 @@ export const createTask = async (req, res) => {
         console.error('Create task error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error'
+            message: error.message || 'Server error'
         });
     }
 };
@@ -66,7 +70,10 @@ export const getAllTasks = async (req, res) => {
         });
     } catch (error) {
         console.error('Get tasks error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 };
 
@@ -76,12 +83,18 @@ export const getTaskDetails = async (req, res) => {
         const { id } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: 'Invalid ID' });
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid task ID'
+            });
         }
 
         const task = await Task.findById(id);
         if (!task) {
-            return res.status(404).json({ success: false, message: 'Task topilmadi' });
+            return res.status(404).json({
+                success: false,
+                message: 'Task topilmadi'
+            });
         }
 
         const completedCount = await UserTask.countDocuments({
@@ -99,7 +112,10 @@ export const getTaskDetails = async (req, res) => {
 
     } catch (error) {
         console.error('Get task detail error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 };
 
@@ -108,6 +124,22 @@ export const updateTask = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid task ID'
+            });
+        }
+
+        // Agar coins kelsa → reward.coins ga o‘tkazamiz
+        if (req.body.coins !== undefined) {
+            req.body.reward = {
+                coins: Number(req.body.coins),
+                xp: 0
+            };
+            delete req.body.coins;
+        }
+
         const task = await Task.findByIdAndUpdate(
             id,
             req.body,
@@ -115,7 +147,10 @@ export const updateTask = async (req, res) => {
         );
 
         if (!task) {
-            return res.status(404).json({ success: false, message: 'Task topilmadi' });
+            return res.status(404).json({
+                success: false,
+                message: 'Task topilmadi'
+            });
         }
 
         res.json({
@@ -126,7 +161,10 @@ export const updateTask = async (req, res) => {
 
     } catch (error) {
         console.error('Update task error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 };
 
@@ -134,6 +172,13 @@ export const updateTask = async (req, res) => {
 export const deleteTask = async (req, res) => {
     try {
         const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid task ID'
+            });
+        }
 
         const completed = await UserTask.countDocuments({
             task: id,
@@ -157,7 +202,10 @@ export const deleteTask = async (req, res) => {
 
     } catch (error) {
         console.error('Delete task error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 };
 
@@ -167,11 +215,25 @@ export const toggleTaskStatus = async (req, res) => {
         const { id } = req.params;
         const { isActive } = req.body;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid task ID'
+            });
+        }
+
         const task = await Task.findByIdAndUpdate(
             id,
             { isActive },
             { new: true }
         );
+
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task topilmadi'
+            });
+        }
 
         res.json({
             success: true,
@@ -180,6 +242,9 @@ export const toggleTaskStatus = async (req, res) => {
 
     } catch (error) {
         console.error('Toggle status error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     }
 };
