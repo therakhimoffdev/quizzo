@@ -5,7 +5,8 @@ import {
     getTaskDetails,
     updateTask,
     deleteTask,
-    toggleTaskStatus
+    toggleTaskStatus,
+    verifyTask
 } from '../../controllers/admin/task.controller.js';
 
 import { adminAuth, adminRole } from '../../middleware/adminAuth.js';
@@ -21,5 +22,6 @@ router.get('/:id', getTaskDetails);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);
 router.patch('/:id/status', toggleTaskStatus);
+router.post('/:id/verify', protect, verifyTask);
 
 export default router;

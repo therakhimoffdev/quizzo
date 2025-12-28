@@ -14,7 +14,7 @@ const checkTelegramSubscription = async (telegramId, channelLink) => {
 
         const res = await axios.get(url, {
             params: {
-                chat_id: channel, 
+                chat_id: channel,
                 user_id: telegramId
             }
         });
@@ -117,6 +117,64 @@ export const completeTask = async (req, res) => {
 
     } catch (error) {
         console.error('Complete task error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+export const verifyTask = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const telegramId = req.user.telegram_id;
+        const { id } = req.params;
+
+        const task = await Task.findById(id);
+        if (!task) {
+            return res.status(404).json({ success: false, message: 'Task topilmadi' });
+        }
+
+        const userTask = await UserTask.findOne({ user: userId, task: id });
+        if (!userTask || userTask.status !== 'in-progress') {
+            return res.status(400).json({
+                success: false,
+                message: 'Avval vazifani bajaring'
+            });
+        }
+
+        // 🔍 Telegram subscription tekshiruvi
+        if (task.externalLink?.includes('t.me')) {
+            const subscribed = await checkTelegramSubscription(
+                telegramId,
+                task.externalLink
+            );
+
+            if (!subscribed) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Siz hali kanalga obuna bo‘lmagansiz'
+                });
+            }
+        }
+
+        // 🎁 Mukofot berish
+        userTask.status = 'completed';
+        userTask.coinsEarned = task.reward.coins;
+        userTask.completedAt = new Date();
+        await userTask.save();
+
+        await User.findByIdAndUpdate(userId, {
+            $inc: {
+                coins: task.reward.coins,
+                xp: task.reward.xp
+            }
+        });
+
+        res.json({
+            success: true,
+            coinsAwarded: task.reward.coins,
+            xpAwarded: task.reward.xp
+        });
+
+    } catch (e) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
