@@ -1,7 +1,8 @@
 import express from 'express';
 import {
     getTasks,
-    completeTask
+    completeTask,
+    verifyTask
 } from '../controllers/task.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
 
@@ -12,5 +13,5 @@ router.get('/', protect, getTasks);
 
 // Taskni bajarib tekshirish
 router.post('/:id/complete', protect, completeTask);
-
+router.post('/:id/verify', protect, verifyTask);
 export default router;
