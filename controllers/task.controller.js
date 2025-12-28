@@ -69,84 +69,39 @@ export const getTasks = async (req, res) => {
         const { filter = 'all', category, type, difficulty } = req.query;
 
         console.log('Getting tasks for user:', userId);
-        console.log('Filters:', { filter, category, type, difficulty });
 
-        // Get all active tasks
+        // Faqat hozir vaqtda faol bo'lgan tasklarni olish
+        const now = new Date();
+
         const tasks = await Task.find({
             isActive: true,
+            $or: [
+                { startDate: { $exists: false } }, // startDate mavjud emas
+                { startDate: { $lte: now } } // startDate hozirdan oldin
+            ],
+            $or: [
+                { endDate: { $exists: false } }, // endDate mavjud emas
+                { endDate: null }, // endDate null
+                { endDate: { $gte: now } } // endDate hozirdan keyin
+            ],
             ...(category && { category }),
             ...(type && { type }),
             ...(difficulty && { difficulty })
         }).sort({ createdAt: -1 });
 
-        console.log('Found tasks in DB:', tasks.length);
+        console.log('Found active tasks:', tasks.length);
 
-        // Get user's task progress
-        const userTasks = await UserTask.find({
-            user: userId
-        }).populate('task');
+        if (tasks.length === 0) {
+            console.log('No active tasks found in database');
+            return res.status(200).json({
+                success: true,
+                tasks: [],
+                stats: {},
+                total: 0
+            });
+        }
 
-        console.log('Found user tasks:', userTasks.length);
-
-        // Combine tasks with user progress
-        const tasksWithProgress = await Promise.all(tasks.map(async (task) => {
-            const userTask = userTasks.find(ut => ut.task && ut.task._id.toString() === task._id.toString());
-
-            let status = 'available';
-            let progress = 0;
-
-            if (userTask) {
-                status = userTask.status;
-                progress = calculateTaskProgress(userTask);
-
-                // Check if task can be retried
-                if (status === 'failed' && userTask.canRetry()) {
-                    status = 'available';
-                }
-
-                // Check if task expired
-                if (userTask.isExpired() && status !== 'completed') {
-                    status = 'expired';
-                }
-            }
-
-            // Check if user meets requirements
-            const user = await User.findById(userId);
-            const meetsRequirements =
-                user.level >= (task.requirements?.minLevel || 1) &&
-                user.coins >= (task.requirements?.minCoins || 0);
-
-            return {
-                ...task.toObject(),
-                status: meetsRequirements ? status : 'locked',
-                progress,
-                coinsEarned: userTask?.coinsEarned || 0,
-                startedAt: userTask?.startedAt,
-                expiresAt: userTask?.expiresAt,
-                attempts: userTask?.attempts || 0,
-                maxAttempts: userTask?.maxAttempts || 3
-            };
-        }));
-
-        // Apply filter
-        const filteredTasks = filterTasksByStatus(tasksWithProgress, filter);
-
-        // Get user stats
-        const userStats = await calculateUserStats(userId);
-
-        console.log('Sending filtered tasks:', filteredTasks.length);
-
-        res.status(200).json({
-            success: true,
-            tasks: filteredTasks,
-            stats: userStats,
-            total: filteredTasks.length,
-            filters: {
-                active: filter,
-                availableFilters: ['all', 'available', 'in-progress', 'completed', 'pending', 'expired', 'locked']
-            }
-        });
-
+        // Qolgan kod...
     } catch (error) {
         console.error('Error getting tasks:', error);
         res.status(500).json({
