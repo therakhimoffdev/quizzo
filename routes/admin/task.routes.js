@@ -5,20 +5,18 @@ import {
     getTaskDetails,
     updateTask,
     deleteTask,
-    toggleTaskStatus,
-    getPendingVerifications
+    toggleTaskStatus
 } from '../../controllers/admin/task.controller.js';
-import { adminAuth, adminRole } from '../../middleware/adminAuth.js';
-const router = express.Router();
 
+import { adminAuth, adminRole } from '../../middleware/adminAuth.js';
+
+const router = express.Router();
 
 router.use(adminAuth);
 router.use(adminRole('admin', 'super_admin'));
 
-// Task CRUD operations
 router.post('/', createTask);
 router.get('/', getAllTasks);
-router.get('/pending-verifications', getPendingVerifications);
 router.get('/:id', getTaskDetails);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);
