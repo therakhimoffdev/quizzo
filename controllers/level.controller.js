@@ -1,5 +1,5 @@
-import LevelProgress from '../models/levelProgress.model.js';
-import User from '../models/user.model.js';
+import LevelProgress from '../models/LevelProgress.js';
+import User from '../models/User.js';
 
 // ACT ma'lumotlari
 const ACTS = [

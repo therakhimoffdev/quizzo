@@ -7,12 +7,12 @@ import {
     updateLevelProgress,
     getLevelDetails
 } from '../controllers/level.controller.js';
-import { auth } from '../middleware/auth.js';
+import { protect } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
 // Auth middleware bilan barcha route'lar
-router.use(auth);
+router.use(protect);
 
 // Level map ma'lumotlari
 router.get('/map', getLevelMap);
