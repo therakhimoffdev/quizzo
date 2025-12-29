@@ -11,7 +11,8 @@ import quizRoutes from '../routes/quiz.routes.js';
 import adminRoutes from '../routes/admin.routes.js';
 import adminTaskRoutes from '../routes/admin/task.routes.js';
 import statsTaskRoutes from '../routes/statsTask.routes.js';
-import adminUsers from '../routes/admin/adminuser.routes.js'
+import adminUsers from '../routes/admin/adminuser.routes.js';
+import levelRoutes from '../routes/level.routes.js'
 dotenv.config();
 
 const app = express();
@@ -47,7 +48,8 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/tasks', statsTaskRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/tasks', adminTaskRoutes);
-app.use('/api/admin/users', adminUsers)
+app.use('/api/admin/users', adminUsers);
+app.use('/api/levels', levelRoutes);
 app.get('/', (req, res) => {
     res.json({ message: 'API is running' });
 });
