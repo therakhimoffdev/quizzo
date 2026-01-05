@@ -23,7 +23,7 @@ router.post('/:level/claim', claimLevelReward);
 // XP qo'shish
 router.post('/xp/add', addXP);
 
-// ACT ma'lumotlari
+// ACT ma'lumotlari (YANGI QO'SHILDI)
 router.get('/act/:actId', getActInfo);
 
 // Level batafsil ma'lumotlari
