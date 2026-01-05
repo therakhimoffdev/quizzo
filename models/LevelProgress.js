@@ -74,7 +74,7 @@ levelProgressSchema.statics.calculateRequiredXP = function (level) {
     return Math.floor(100 * Math.pow(1.15, level - 1));
 };
 
-// Sovrinlarni hisoblash
+// Sovrinlarni hisoblash (sizning misollaringizga ko'ra)
 levelProgressSchema.statics.calculateRewards = function (level) {
     const rewards = {
         coins: 0,
@@ -83,43 +83,56 @@ levelProgressSchema.statics.calculateRewards = function (level) {
         claimedCoins: 0
     };
 
-    // ACT I (1-100)
-    if (level <= 100) {
-        // Har 5 levelda: bonus coins + xp boost
+    // Level 1-10 uchun sovrinlar
+    if (level >= 1 && level <= 10) {
+        // Level 1: 20 coin + basic reward
+        if (level === 1) {
+            rewards.coins = 20;
+            rewards.xpBoost = 1.0;
+            rewards.specialReward = "Beginner's Luck";
+        }
+        // Level 2-10
+        else {
+            rewards.coins = 20 + (level * 2);
+            rewards.xpBoost = 1.0 + (level * 0.01);
+        }
+    }
+    // Level 11-100
+    else if (level <= 100) {
         if (level % 5 === 0) {
             rewards.coins = 100 + (level * 2);
             rewards.xpBoost = 1.2;
             rewards.specialReward = "XP Boost (1 soat)";
         }
-        // Har 10 levelda: maxsus sovrin
         else if (level % 10 === 0) {
             rewards.coins = 150 + (level * 3);
             rewards.xpBoost = 1.3;
-            if (level === 10) rewards.specialReward = "Bronze Badge";
-            else if (level === 20) rewards.specialReward = "Silver Avatar";
-            else if (level === 30) rewards.specialReward = "Gold Frame";
-            else if (level === 40) rewards.specialReward = "Platinum Title";
-            else if (level === 50) rewards.specialReward = "Diamond Border";
-            else if (level === 60) rewards.specialReward = "Ruby Effects";
-            else if (level === 70) rewards.specialReward = "Emerald Trail";
-            else if (level === 80) rewards.specialReward = "Sapphire Crown";
-            else if (level === 90) rewards.specialReward = "Legendary Card";
-            else if (level === 100) rewards.specialReward = "Rising Star + ACT II";
+            // Har xil maxsus sovrinlar
+            const specialRewards = {
+                10: "Bronze Badge",
+                20: "Silver Avatar",
+                30: "Gold Frame",
+                40: "Platinum Title",
+                50: "Diamond Border",
+                60: "Ruby Effects",
+                70: "Emerald Trail",
+                80: "Sapphire Crown",
+                90: "Legendary Card",
+                100: "Rising Star + ACT II"
+            };
+            rewards.specialReward = specialRewards[level] || "Special Reward";
         }
-        // Normal level
         else {
             rewards.coins = 20 + Math.floor(level * 0.5);
             rewards.xpBoost = 1.0 + (level * 0.001);
         }
 
-        // BOSS level (100)
         if (level === 100) {
             rewards.coins = 500;
             rewards.xpBoost = 2.0;
         }
     }
-
-    // ACT II (101-200)
+    // Level 101-200
     else if (level <= 200) {
         const relativeLevel = level - 100;
 
@@ -131,16 +144,19 @@ levelProgressSchema.statics.calculateRewards = function (level) {
         else if (level % 10 === 0) {
             rewards.coins = 300 + (relativeLevel * 4);
             rewards.xpBoost = 1.4;
-            if (level === 110) rewards.specialReward = "Pro Starter Pack";
-            else if (level === 120) rewards.specialReward = "Pro Avatar";
-            else if (level === 130) rewards.specialReward = "Pro Border";
-            else if (level === 140) rewards.specialReward = "Pro Effects";
-            else if (level === 150) rewards.specialReward = "Pro Master";
-            else if (level === 160) rewards.specialReward = "Elite Pass";
-            else if (level === 170) rewards.specialReward = "Premium Access";
-            else if (level === 180) rewards.specialReward = "VIP Status";
-            else if (level === 190) rewards.specialReward = "Champion Title";
-            else if (level === 200) rewards.specialReward = "Legendary Mind + ACT III";
+            const specialRewards = {
+                110: "Pro Starter Pack",
+                120: "Pro Avatar",
+                130: "Pro Border",
+                140: "Pro Effects",
+                150: "Pro Master",
+                160: "Elite Pass",
+                170: "Premium Access",
+                180: "VIP Status",
+                190: "Champion Title",
+                200: "Legendary Mind + ACT III"
+            };
+            rewards.specialReward = specialRewards[level] || "Pro Reward";
         }
         else {
             rewards.coins = 50 + Math.floor(relativeLevel * 0.8);
@@ -157,8 +173,7 @@ levelProgressSchema.statics.calculateRewards = function (level) {
             rewards.xpBoost = 2.2;
         }
     }
-
-    // ACT III (201-300)
+    // Level 201-300
     else {
         const relativeLevel = level - 200;
 
@@ -170,16 +185,19 @@ levelProgressSchema.statics.calculateRewards = function (level) {
         else if (level % 10 === 0) {
             rewards.coins = 600 + (relativeLevel * 6);
             rewards.xpBoost = 1.6;
-            if (level === 210) rewards.specialReward = "Legendary Pack";
-            else if (level === 220) rewards.specialReward = "Mythic Avatar";
-            else if (level === 230) rewards.specialReward = "Ancient Frame";
-            else if (level === 240) rewards.specialReward = "Immortal Title";
-            else if (level === 250) rewards.specialReward = "Godlike Status";
-            else if (level === 260) rewards.specialReward = "Divine Effects";
-            else if (level === 270) rewards.specialReward = "Celestial Trail";
-            else if (level === 280) rewards.specialReward = "Cosmic Crown";
-            else if (level === 290) rewards.specialReward = "Universe Card";
-            else if (level === 300) rewards.specialReward = "IMMORTAL PLAYER";
+            const specialRewards = {
+                210: "Legendary Pack",
+                220: "Mythic Avatar",
+                230: "Ancient Frame",
+                240: "Immortal Title",
+                250: "Godlike Status",
+                260: "Divine Effects",
+                270: "Celestial Trail",
+                280: "Cosmic Crown",
+                290: "Universe Card",
+                300: "IMMORTAL PLAYER"
+            };
+            rewards.specialReward = specialRewards[level] || "Legendary Reward";
         }
         else {
             rewards.coins = 100 + Math.floor(relativeLevel * 1.2);
@@ -241,4 +259,34 @@ levelProgressSchema.methods.completeLevel = async function (xpEarned = 0) {
     return { completed: false };
 };
 
-export default mongoose.model('LevelProgress', levelProgressSchema);    
+// Foydalanuvchi uchun barcha level progresslarni yaratish
+levelProgressSchema.statics.createAllLevelsForUser = async function (userId, currentLevel = 1) {
+    const LevelProgress = mongoose.model('LevelProgress');
+
+    for (let level = 1; level <= 300; level++) {
+        const status = level < currentLevel ? 'completed' :
+            level === currentLevel ? 'current' : 'locked';
+
+        const act = Math.floor((level - 1) / 100) + 1;
+        const requiredXP = LevelProgress.calculateRequiredXP(level);
+        const rewards = LevelProgress.calculateRewards(level);
+
+        await LevelProgress.findOneAndUpdate(
+            { user: userId, level },
+            {
+                user: userId,
+                level,
+                act,
+                status,
+                requiredXP,
+                rewards,
+                currentXP: status === 'current' ? 0 : (status === 'completed' ? requiredXP : 0),
+                unlockedAt: status !== 'locked' ? new Date() : null,
+                completedAt: status === 'completed' ? new Date() : null
+            },
+            { upsert: true, new: true }
+        );
+    }
+};
+
+export default mongoose.model('LevelProgress', levelProgressSchema);

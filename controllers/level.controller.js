@@ -58,7 +58,7 @@ export const getLevelMap = async (req, res) => {
 
         // Agar progress bo'lmasa, barcha level progresslarini yaratish
         if (levelProgress.length === 0) {
-            await initializeUserLevels(userId);
+            await LevelProgress.createAllLevelsForUser(userId, user.level);
             levelProgress = await LevelProgress.find({ user: userId }).sort({ level: 1 });
         }
 
@@ -86,7 +86,6 @@ export const getLevelMap = async (req, res) => {
         const currentAct = Math.floor((user.level - 1) / 100) + 1;
 
         // XP progress hisoblash
-        const currentLevelProgress = levelProgress.find(lp => lp.level === user.level) || {};
         const xpProgress = {
             current: user.xp,
             required: user.requiredXp,
@@ -133,17 +132,38 @@ export const claimLevelReward = async (req, res) => {
             });
         }
 
-        // Level progressni tekshirish
-        const progress = await LevelProgress.findOne({
+        // Avval LevelProgress mavjudligini tekshirish
+        let progress = await LevelProgress.findOne({
             user: userId,
             level: levelNum
         });
 
+        // Agar progress bo'lmasa, yaratish (ayniqsa level 1 uchun)
         if (!progress) {
-            return res.status(404).json({
-                success: false,
-                message: "Level topilmadi"
+            // Foydalanuvchini topish
+            const user = await User.findById(userId);
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Foydalanuvchi topilmadi"
+                });
+            }
+            
+            // Level progress yaratish
+            await LevelProgress.createAllLevelsForUser(userId, user.level);
+            
+            // Qayta o'qish
+            progress = await LevelProgress.findOne({
+                user: userId,
+                level: levelNum
             });
+            
+            if (!progress) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Level progress yaratilmadi"
+                });
+            }
         }
 
         // Level tamomlanganligini tekshirish
@@ -152,6 +172,13 @@ export const claimLevelReward = async (req, res) => {
                 success: false,
                 message: "Bu level hali tamomlanmagan"
             });
+        }
+
+        // Level 1 uchun maxsus tekshirish: Agar current bo'lsa, uni completed qilamiz
+        if (levelNum === 1 && progress.status === 'current') {
+            progress.status = 'completed';
+            progress.completedAt = new Date();
+            await progress.save();
         }
 
         // Sovrin olib bo'linganligini tekshirish
@@ -173,10 +200,11 @@ export const claimLevelReward = async (req, res) => {
         }
 
         // Sovrinlarni berish
-        user.coins += progress.rewards.coins;
+        const coinsToAdd = progress.rewards.coins || 20; // Default 20 coin
+        user.coins += coinsToAdd;
 
         // XP boost ni qo'llash (agar mavjud bo'lsa)
-        if (progress.rewards.xpBoost > 1) {
+        if (progress.rewards.xpBoost && progress.rewards.xpBoost > 1) {
             user.activeBonuses.push({
                 type: 'xpBoost',
                 value: progress.rewards.xpBoost,
@@ -196,7 +224,7 @@ export const claimLevelReward = async (req, res) => {
 
         // Level progressni yangilash
         progress.isClaimed = true;
-        progress.rewards.claimedCoins = progress.rewards.coins;
+        progress.rewards.claimedCoins = coinsToAdd;
         progress.rewards.claimedAt = new Date();
 
         // Saqlash
@@ -209,7 +237,10 @@ export const claimLevelReward = async (req, res) => {
             success: true,
             data: {
                 level: progress.level,
-                rewards: progress.rewards,
+                rewards: {
+                    ...progress.rewards,
+                    coins: coinsToAdd
+                },
                 user: {
                     coins: user.coins,
                     level: user.level,
@@ -217,7 +248,7 @@ export const claimLevelReward = async (req, res) => {
                     activeBonuses: user.activeBonuses
                 }
             },
-            message: `Sovrin muvaffaqiyatli olindi! ${progress.rewards.coins} coin qo'shildi.`
+            message: `Sovrin muvaffaqiyatli olindi! ${coinsToAdd} coin qo'shildi.`
         });
 
     } catch (error) {
@@ -251,9 +282,23 @@ export const addXP = async (req, res) => {
             });
         }
 
+        // Level progressni tekshirish va yaratish (agar bo'lmasa)
+        let currentProgress = await LevelProgress.findOne({
+            user: userId,
+            level: user.level
+        });
+
+        if (!currentProgress) {
+            await LevelProgress.createAllLevelsForUser(userId, user.level);
+            currentProgress = await LevelProgress.findOne({
+                user: userId,
+                level: user.level
+            });
+        }
+
         // Aktive bonuslarni hisoblash
-        const activeXpBonuses = user.activeBonuses.filter(bonus =>
-            bonus.type === 'xpBoost' &&
+        const activeXpBonuses = user.activeBonuses.filter(bonus => 
+            bonus.type === 'xpBoost' && 
             bonus.expiresAt > new Date()
         );
 
@@ -262,10 +307,17 @@ export const addXP = async (req, res) => {
 
         // XP qo'shish
         user.xp += boostedXP;
+        
+        // Joriy level progressga XP qo'shish
+        if (currentProgress) {
+            currentProgress.currentXP += boostedXP;
+            await currentProgress.save();
+        }
 
         // Levelni tekshirish
         let leveledUp = false;
         let newLevel = user.level;
+        let levelsGained = 0;
 
         while (user.xp >= user.requiredXp) {
             // Ortiqcha XP ni olib tashlash
@@ -273,19 +325,20 @@ export const addXP = async (req, res) => {
             user.level += 1;
             leveledUp = true;
             newLevel = user.level;
+            levelsGained++;
 
             // Yangi level uchun requiredXP ni hisoblash
             user.requiredXp = Math.floor(100 * Math.pow(1.15, user.level - 1));
 
             // Level progressni yangilash
-            await updateLevelProgress(userId, user.level);
+            await _updateLevelProgress(userId, user.level);
 
             // 100 yoki 200 levelda ACT o'zgarishi
             if (user.level === 100 || user.level === 200) {
                 user.levelProgress.currentAct = Math.floor(user.level / 100) + 1;
-
+                
                 // Yangi ACT uchun level progresslarni yaratish
-                await createLevelProgressForAct(userId, user.levelProgress.currentAct);
+                await LevelProgress.createAllLevelsForUser(userId, user.level);
             }
         }
 
@@ -294,17 +347,18 @@ export const addXP = async (req, res) => {
 
         // Yangi user ma'lumotlarini olish
         const updatedUser = await User.findById(userId)
-            .select('level xp requiredXp coins levelProgress');
+            .select('level xp requiredXp coins levelProgress activeBonuses');
 
         res.json({
             success: true,
             data: {
                 xpAdded: boostedXP,
-                oldLevel: user.level - (leveledUp ? 1 : 0),
+                oldLevel: user.level - levelsGained,
                 newLevel: updatedUser.level,
                 user: updatedUser,
                 leveledUp: leveledUp,
-                xpBoost: totalXpBoost
+                xpBoost: totalXpBoost,
+                levelsGained: levelsGained
             },
             message: `+${boostedXP} XP qo'shildi! ${leveledUp ? `Level ${newLevel} ga chiqdingiz!` : ''}`
         });
@@ -318,7 +372,7 @@ export const addXP = async (req, res) => {
     }
 };
 
-// ACT ma'lumotlarini olish (YANGI QO'SHILDI)
+// ACT ma'lumotlarini olish
 export const getActInfo = async (req, res) => {
     try {
         const { actId } = req.params;
@@ -340,7 +394,7 @@ export const getActInfo = async (req, res) => {
             });
         }
 
-        // ACT dagi level progresslarni olish (agar user autentifikatsiyadan o'tgan bo'lsa)
+        // ACT dagi level progresslarni olish
         let actProgress = [];
         if (req.user) {
             actProgress = await LevelProgress.find({
@@ -392,43 +446,10 @@ export const updateLevelProgress = async (req, res) => {
         user.xp = 0;
         user.requiredXp = Math.floor(100 * Math.pow(1.15, level - 1));
 
-        // Level progressni yangilash
-        await user.updateLevelProgress();
+        // Level progresslarni yangilash
+        await LevelProgress.createAllLevelsForUser(userId, level);
+        
         await user.save();
-
-        // Barcha oldingi level progresslarni completed qilish
-        await LevelProgress.updateMany(
-            {
-                user: userId,
-                level: { $lte: level }
-            },
-            {
-                status: 'completed',
-                completedAt: new Date()
-            }
-        );
-
-        // Joriy levelni current qilish
-        await LevelProgress.findOneAndUpdate(
-            { user: userId, level: level },
-            {
-                status: 'current',
-                act: Math.floor((level - 1) / 100) + 1,
-            },
-            { upsert: true, new: true }
-        );
-
-        // Keyingi levelni locked qilish
-        if (level < 300) {
-            await LevelProgress.findOneAndUpdate(
-                { user: userId, level: level + 1 },
-                {
-                    status: 'locked',
-                    act: Math.floor((level) / 100) + 1,
-                },
-                { upsert: true, new: true }
-            );
-        }
 
         res.json({
             success: true,
@@ -465,10 +486,28 @@ export const getLevelDetails = async (req, res) => {
             });
         }
 
-        const progress = await LevelProgress.findOne({
+        // Avval progressni qidirish
+        let progress = await LevelProgress.findOne({
             user: userId,
             level: levelNum
         });
+
+        // Agar progress bo'lmasa, yaratish
+        if (!progress) {
+            const user = await User.findById(userId);
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Foydalanuvchi topilmadi"
+                });
+            }
+            
+            await LevelProgress.createAllLevelsForUser(userId, user.level);
+            progress = await LevelProgress.findOne({
+                user: userId,
+                level: levelNum
+            });
+        }
 
         if (!progress) {
             return res.status(404).json({
@@ -506,75 +545,80 @@ export const getLevelDetails = async (req, res) => {
     }
 };
 
-// Helper funksiyalar
-const initializeUserLevels = async (userId) => {
-    for (let level = 1; level <= 300; level++) {
-        const status = level === 1 ? 'current' : 'locked';
-        const act = Math.floor((level - 1) / 100) + 1;
-        const requiredXP = Math.floor(100 * Math.pow(1.15, level - 1));
-        const rewards = LevelProgress.calculateRewards(level);
-
-        await LevelProgress.create({
-            user: userId,
-            level,
-            act,
-            status,
-            requiredXP,
-            rewards
+// Foydalanuvchi uchun level progresslarni boshlash
+export const initUserLevels = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        // User ma'lumotlarini olish
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Foydalanuvchi topilmadi"
+            });
+        }
+        
+        // Level progresslarni yaratish
+        await LevelProgress.createAllLevelsForUser(userId, user.level);
+        
+        // Level progresslarni o'qib olish
+        const levelProgress = await LevelProgress.find({ user: userId })
+            .sort({ level: 1 });
+        
+        res.json({
+            success: true,
+            data: {
+                user: {
+                    level: user.level,
+                    coins: user.coins
+                },
+                levelsCreated: levelProgress.length,
+                message: "Level progresslar muvaffaqiyatli yaratildi"
+            }
+        });
+        
+    } catch (error) {
+        console.error('Init user levels error:', error);
+        res.status(500).json({
+            success: false,
+            message: "Server xatosi"
         });
     }
 };
 
-// const updateLevelProgress = async (userId, newLevel) => {
-//     // Oldingi levelni completed qilish
-//     await LevelProgress.findOneAndUpdate(
-//         { user: userId, level: newLevel - 1 },
-//         {
-//             status: 'completed',
-//             completedAt: new Date(),
-//             currentXP: 0
-//         }
-//     );
+// Helper funksiyalar
 
-//     // Yangi levelni current qilish
-//     await LevelProgress.findOneAndUpdate(
-//         { user: userId, level: newLevel },
-//         {
-//             status: 'current',
-//             unlockedAt: new Date()
-//         }
-//     );
-
-//     // Keyingi levelni ochish
-//     if (newLevel < 300) {
-//         await LevelProgress.findOneAndUpdate(
-//             { user: userId, level: newLevel + 1 },
-//             {
-//                 status: 'locked'
-//             },
-//             { upsert: true }
-//         );
-//     }
-// };
-
-const createLevelProgressForAct = async (userId, act) => {
-    const startLevel = (act - 1) * 100 + 1;
-    const endLevel = act * 100;
-
-    for (let level = startLevel; level <= endLevel; level++) {
-        const exists = await LevelProgress.findOne({ user: userId, level });
-        if (!exists) {
-            const requiredXP = Math.floor(100 * Math.pow(1.15, level - 1));
-            const rewards = LevelProgress.calculateRewards(level);
-
-            await LevelProgress.create({
-                user: userId,
-                level,
-                act,
-                status: level === startLevel ? 'current' : 'locked',
-                requiredXP,
-                rewards
-            });
+// Level progressni yangilash (private helper)
+const _updateLevelProgress = async (userId, newLevel) => {
+    // Oldingi levelni completed qilish
+    await LevelProgress.findOneAndUpdate(
+        { user: userId, level: newLevel - 1 },
+        {
+            status: 'completed',
+            completedAt: new Date(),
+            currentXP: 0
         }
+    );
+
+    // Yangi levelni current qilish
+    await LevelProgress.findOneAndUpdate(
+        { user: userId, level: newLevel },
+        {
+            status: 'current',
+            unlockedAt: new Date()
+        }
+    );
+
+    // Keyingi levelni ochish
+    if (newLevel < 300) {
+        await LevelProgress.findOneAndUpdate(
+            { user: userId, level: newLevel + 1 },
+            {
+                status: 'locked'
+            },
+            { upsert: true }
+        );
     }
 };
